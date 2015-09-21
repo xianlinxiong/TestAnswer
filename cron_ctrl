@@ -1,0 +1,76 @@
+#!/usr/bin/perl
+use IO::File;
+use POSIX qw(tmpnam);
+
+my $cnt = @ARGV;
+if($cnt != 2){
+	(my $pgm = $0 ) =~ s!.*/(.*)!$1!;
+	print "Wrong Usage! \nUsage:  $pgm [--start/--stop/--list] command.\n";
+	exit;
+}
+ 
+do { $name = tmpnam() }
+    until $fd = IO::File->new($name, O_RDWR|O_CREAT|O_EXCL);
+$fd->autoflush(1);
+my ($cmd, $action);
+
+foreach $arg (@ARGV){
+	if($arg =~ /--start/){
+		$cmd=start;
+	}
+	elsif($arg =~ /--stop/){
+		$cmd=stop;
+	}
+	elsif($arg =~ /--list/){
+		$cmd=list;
+	}
+	else{
+		$action = $arg;
+	}
+}
+if(!(defined($cmd) && defined($action))){
+	print "Wrong Usage! \nUsage:  $pgm [--start/--stop/--list] command.\n";
+	exit;
+}
+@cron_line = `crontab -l`;
+my $find;
+foreach (@cron_line){
+	if(m/$action/) {
+		if ( $cmd eq 'start') {
+			if(/^(#)/){ s/^#//} 
+			$find='1';
+		}
+		elsif($cmd eq 'stop'){
+			if(/^[^#]/){ s/(.*)/#$1/;}
+			$find='1';
+		}
+		elsif($cmd eq 'list'){
+			if(/^[^#]/){ print $_;} else {print $action . "   stoped\n"}
+			$find='2';
+		}
+	}
+	print $fd $_;
+
+}
+close $fd;
+if(!defined($find)){
+	print "$action does not exist in cron.\n";
+	unlink($name) or die "Couldn't unlink $name : $!";
+	exit;
+}
+if($find eq '2'){
+	unlink($name) or die "Couldn't unlink $name : $!";
+	exit;
+}
+
+
+my $cmdrun = "crontab " . $name;
+my $result = system($cmdrun);
+if($result == 0){
+	print "$action $cmd succussess.\n";
+}
+else{
+	print "$action $cmd failed. Please try again.\n";
+}
+unlink($name) or die "Couldn't unlink $name : $!";
+
